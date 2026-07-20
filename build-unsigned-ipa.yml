@@ -1,0 +1,48 @@
+name: Build unsigned IPA
+
+# Genera el proyecto con XcodeGen, lo compila en un Mac de GitHub
+# y publica un .ipa SIN FIRMAR. Luego lo firmas e instalas con Sideloadly.
+
+on:
+  workflow_dispatch:        # botón "Run workflow" en la pestaña Actions
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-14       # runner de macOS (gratis en repos públicos)
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar XcodeGen
+        run: brew install xcodegen
+
+      - name: Generar el proyecto de Xcode
+        run: xcodegen generate
+
+      - name: Compilar sin firma
+        run: |
+          xcodebuild \
+            -project JoystickLocation.xcodeproj \
+            -scheme JoystickLocation \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            clean build
+
+      - name: Empaquetar en .ipa
+        run: |
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -n 1)
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r JoystickLocation-unsigned.ipa Payload
+
+      - name: Subir el .ipa como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: JoystickLocation-unsigned-ipa
+          path: JoystickLocation-unsigned.ipa
